@@ -94,7 +94,7 @@ async def shop(update: Update, context: CallbackContext) -> None:
 async def play_game(update: Update, context: CallbackContext) -> None:
     """Handle /playgame command to open game as a Mini App."""
     await update.message.reply_text(
-        "Click the button below to play the game!",
+        "Click the button below to play The Last Strip!",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "🎮 Launch The Last Strip",
