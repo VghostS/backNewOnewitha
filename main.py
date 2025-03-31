@@ -18,8 +18,6 @@ from telegram.ext import (
 from config import ITEMS, MESSAGES
 import getSet
 
-if __name__ == '__main__':
-    getSet.app.run(port=5000)
 
 # Load environment variables
 load_dotenv()
@@ -257,3 +255,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+    getSet.app.run(port=5000)
