@@ -230,7 +230,6 @@ def main() -> None:
     """Start the bot."""
     try:
         application = Application.builder().token(BOT_TOKEN).build()
-        getSet.app.run(port=5000, host='0.0.0.0')
 
         # Add handlers
         application.add_handler(CommandHandler("start", start))
@@ -245,6 +244,7 @@ def main() -> None:
 
         # Add error handler
         application.add_error_handler(error_handler)
+        getSet.app.run(port=5000, host='0.0.0.0')
 
         # Start the bot
         logger.info("Bot started")
