@@ -16,7 +16,6 @@ from telegram.ext import (
 )
 
 from config import ITEMS, MESSAGES
-import getSet
 
 
 # Load environment variables
@@ -248,7 +247,6 @@ def main() -> None:
         # Start the bot
         logger.info("Bot started")
         application.run_polling()
-        getSet.app.run(port=5000, host='0.0.0.0')
 
     except Exception as e:
         logger.error(f"Error starting bot: {str(e)}")
