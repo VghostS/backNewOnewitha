@@ -19,7 +19,7 @@ from config import ITEMS, MESSAGES
 import getSet
 
 if __name__ == '__main__':
-    getSet.app.run(port=8080)
+    getSet.app.run(port=5000)
 
 # Load environment variables
 load_dotenv()

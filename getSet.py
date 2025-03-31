@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
 import os
+import telebot
 
 app = Flask(__name__)
-bot = os.getenv('BOT_TOKEN')
+bot_token = os.getenv('BOT_TOKEN')
+bot = telebot.TeleBot(bot_token)
 
 # Endpoint to get a default message
 @app.route('/get', methods=['GET'])
@@ -22,4 +24,4 @@ def send_welcome(message):
     bot.reply_to(message, "Welcome to the bot!")
 
 if __name__ == '__main__':
-    app.run(port=8080)
+    app.run(port=5000)
