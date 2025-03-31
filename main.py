@@ -16,6 +16,10 @@ from telegram.ext import (
 )
 
 from config import ITEMS, MESSAGES
+import getSet
+
+if __name__ == '__main__':
+    getSet.app.run(port=8080)
 
 # Load environment variables
 load_dotenv()
