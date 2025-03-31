@@ -21,6 +21,9 @@ from config import ITEMS, MESSAGES
 from flask import Flask
 import asyncio
 import json
+from web_app import create_web_app
+from hypercorn.asyncio import serve
+from hypercorn.config import Config
 
 
 # Load environment variables
@@ -243,17 +246,25 @@ async def error_handler(update: Update, context: CallbackContext) -> None:
     """Handle errors caused by Updates."""
     logger.error(f"Update {update} caused error {context.error}")
 
+async def run_web_app(bot):
+    """Run the web application alongside the bot."""
+    app = create_web_app(bot)
+    config = Config()
+    config.bind = ["0.0.0.0:5000"]
+    config.use_reloader = True
+    await serve(app, config)
 
-def main() -> None:
-    """Start the bot."""
+async def main() -> None:
+    """Start the bot and web application."""
     try:
+        # Initialize the application
         application = Application.builder().token(BOT_TOKEN).build()
 
         # Add handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("refund", refund_command))
-        application.add_handler(CommandHandler("playgame", play_game))  # New handler for /playgame
+        application.add_handler(CommandHandler("playgame", play_game))
         application.add_handler(CommandHandler("shop", shop))
         application.add_handler(CommandHandler("oneflask", oneflask_purchase))
         application.add_handler(CallbackQueryHandler(button_handler))
@@ -263,13 +274,19 @@ def main() -> None:
         # Add error handler
         application.add_error_handler(error_handler)
 
-        # Start the bot
-        logger.info("Bot started")
-        application.run_polling()
+        # Create tasks for both the bot and web application
+        bot = application.bot
+        tasks = [
+            asyncio.create_task(application.run_polling()),
+            asyncio.create_task(run_web_app(bot))
+        ]
+
+        # Run both the bot and web application
+        logger.info("Starting bot and web application...")
+        await asyncio.gather(*tasks)
 
     except Exception as e:
-        logger.error(f"Error starting bot: {str(e)}")
-
+        logger.error(f"Error starting application: {str(e)}")
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
