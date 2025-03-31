@@ -22,4 +22,4 @@ def send_welcome(message):
     bot.reply_to(message, "Welcome to the bot!")
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(port=8080)
