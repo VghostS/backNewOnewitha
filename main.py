@@ -1,3 +1,4 @@
+import datetime
 import os
 import logging
 import traceback
@@ -16,6 +17,10 @@ from telegram.ext import (
 )
 
 from config import ITEMS, MESSAGES
+
+from flask import Flask
+import asyncio
+import json
 
 
 # Load environment variables
@@ -197,7 +202,8 @@ async def precheckout_callback(update: Update, context: CallbackContext) -> None
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
     """Handle successful payments."""
     payment = update.message.successful_payment
-    item_id = payment.invoice_payload
+    payload = payment.invoice_payload
+    item_id, player_id = payload.split('_')  # Split the payload to get both item_id and player_id
     item = ITEMS[item_id]
     user_id = update.effective_user.id
 
@@ -206,8 +212,21 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
 
     logger.info(
         f"Successful payment from user {user_id} "
-        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id})"
+        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id}, player_id: {player_id})"
     )
+
+    # Store the purchase data in a format accessible to your game
+    purchase_data = {
+        'player_id': player_id,
+        'item_id': item_id,
+        'purchase_time': str(datetime.datetime.now()),
+        'secret': item['secret']
+    }
+
+    # You might want to store this in a database or temporary storage
+    # For this example, we'll store it in a file
+    with open(f'purchases/{payment.telegram_payment_charge_id}.json', 'w') as f:
+        json.dump(purchase_data, f)
 
     await update.message.reply_text(
         f"Thank you for your purchase! 🎉\n\n"
