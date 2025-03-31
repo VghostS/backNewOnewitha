@@ -254,5 +254,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    getSet.app.run(port=5000, host='0.0.0.0')
     main()
-    getSet.app.run(port=5000)
