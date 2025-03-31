@@ -1,4 +1,3 @@
-import datetime
 import os
 import logging
 import traceback
@@ -17,13 +16,6 @@ from telegram.ext import (
 )
 
 from config import ITEMS, MESSAGES
-
-from flask import Flask
-import asyncio
-import json
-from web_app import create_web_app
-from hypercorn.asyncio import serve
-from hypercorn.config import Config
 
 
 # Load environment variables
@@ -205,8 +197,7 @@ async def precheckout_callback(update: Update, context: CallbackContext) -> None
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
     """Handle successful payments."""
     payment = update.message.successful_payment
-    payload = payment.invoice_payload
-    item_id, player_id = payload.split('_')  # Split the payload to get both item_id and player_id
+    item_id = payment.invoice_payload
     item = ITEMS[item_id]
     user_id = update.effective_user.id
 
@@ -215,21 +206,8 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
 
     logger.info(
         f"Successful payment from user {user_id} "
-        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id}, player_id: {player_id})"
+        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id})"
     )
-
-    # Store the purchase data in a format accessible to your game
-    purchase_data = {
-        'player_id': player_id,
-        'item_id': item_id,
-        'purchase_time': str(datetime.datetime.now()),
-        'secret': item['secret']
-    }
-
-    # You might want to store this in a database or temporary storage
-    # For this example, we'll store it in a file
-    with open(f'purchases/{payment.telegram_payment_charge_id}.json', 'w') as f:
-        json.dump(purchase_data, f)
 
     await update.message.reply_text(
         f"Thank you for your purchase! 🎉\n\n"
@@ -246,25 +224,17 @@ async def error_handler(update: Update, context: CallbackContext) -> None:
     """Handle errors caused by Updates."""
     logger.error(f"Update {update} caused error {context.error}")
 
-async def run_web_app(bot):
-    """Run the web application alongside the bot."""
-    app = create_web_app(bot)
-    config = Config()
-    config.bind = ["0.0.0.0:5000"]
-    config.use_reloader = True
-    await serve(app, config)
 
-async def main() -> None:
-    """Start the bot and web application."""
+def main() -> None:
+    """Start the bot."""
     try:
-        # Initialize the application
         application = Application.builder().token(BOT_TOKEN).build()
 
         # Add handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("refund", refund_command))
-        application.add_handler(CommandHandler("playgame", play_game))
+        application.add_handler(CommandHandler("playgame", play_game))  # New handler for /playgame
         application.add_handler(CommandHandler("shop", shop))
         application.add_handler(CommandHandler("oneflask", oneflask_purchase))
         application.add_handler(CallbackQueryHandler(button_handler))
@@ -274,19 +244,13 @@ async def main() -> None:
         # Add error handler
         application.add_error_handler(error_handler)
 
-        # Create tasks for both the bot and web application
-        bot = application.bot
-        tasks = [
-            asyncio.create_task(application.run_polling()),
-            asyncio.create_task(run_web_app(bot))
-        ]
-
-        # Run both the bot and web application
-        logger.info("Starting bot and web application...")
-        await asyncio.gather(*tasks)
+        # Start the bot
+        logger.info("Bot started")
+        application.run_polling()
 
     except Exception as e:
-        logger.error(f"Error starting application: {str(e)}")
+        logger.error(f"Error starting bot: {str(e)}")
+
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
