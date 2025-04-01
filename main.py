@@ -18,6 +18,9 @@ from telegram.ext import (
 from config import ITEMS, MESSAGES
 # Add these imports at the top
 from urllib.parse import urlencode
+from telegram import WebAppInfo
+import json
+
 GAME_URL = "https://vkss.itch.io/tls"
 BOT_USERNAME = os.getenv('theLastStrip_bot')
 
@@ -235,7 +238,7 @@ async def precheckout_callback(update: Update, context: CallbackContext) -> None
         await query.answer(ok=False, error_message="Something went wrong...")
 
 
-# Modify your successful_payment_callback function to handle game returns
+# Modify your successful_payment_callback function
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
     """Handle successful payments with game return URL."""
     payment = update.message.successful_payment
@@ -246,30 +249,27 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
     # Update statistics
     STATS['purchases'][str(user_id)] += 1
 
-    # Create return URL with purchase data
-    game_params = {
+    # Create purchase data
+    purchase_data = {
         'item_id': item_id,
         'secret': item['secret'],
         'user_id': str(user_id),
         'transaction_id': payment.telegram_payment_charge_id
     }
-    return_url = f"{GAME_URL}?{urlencode(game_params)}"
 
-    # Create a button to return to the game
-    keyboard = [
-        [InlineKeyboardButton(
-            "Return to Game",
-            web_app=WebAppInfo(url=return_url)
-        )]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Create the return URL with a special protocol
+    return_url = f"{GAME_URL}?purchaseData={json.dumps(purchase_data)}"
 
     await update.message.reply_text(
         f"Thank you for your purchase! 🎉\n\n"
         f"Your {item['name']} has been activated.\n\n"
-        f"Transaction ID: `{payment.telegram_payment_charge_id}`\n"
-        "Click below to return to the game:",
-        reply_markup=reply_markup,
+        f"Click below to return to the game and claim your item:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "🎮 Return to Game",
+                web_app=WebAppInfo(url=return_url)
+            )]
+        ]),
         parse_mode='Markdown'
     )
 
