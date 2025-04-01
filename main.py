@@ -68,7 +68,7 @@ async def oneflask_purchase(update: Update, context: CallbackContext) -> None:
 async def start(update: Update, context: CallbackContext) -> None:
      await update.message.reply_photo(
          photo="https://github.com/VghostS/backNewOnewitha/blob/main/HomeScreen.png?raw=true",
-        caption="Welcome to The Last Strip \nCollect coins, Upgrade your Character Its Play to earn \nClick the button below to play The Last Strip!",
+        caption="Welcome to The Last Strip \nCollect coins, Upgrade your Character and Never Stop\n \nClick the button below to play The Last Strip!",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "🎮 Launch The Last Strip",
