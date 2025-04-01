@@ -78,19 +78,21 @@ async def oneflask_purchase(update: Update, context: CallbackContext) -> None:
 
 async def start(update: Update, context: CallbackContext) -> None:
     """Handle deep links for purchases."""
-    # Check if there's a deep link parameter
     if context.args and context.args[0].startswith('purchase_flask_'):
         try:
-            # Extract player ID from the deep link
             player_id = int(context.args[0].split('_')[-1])
+            user_id = update.effective_user.id
+            chat_id = update.effective_chat.id
 
-            # Directly send invoice with player ID in payload
+            # Create a payload that matches the expected format in precheckout_callback
+            payload = f"flask_one_{user_id}_{chat_id}"
+
             await context.bot.send_invoice(
-                chat_id=update.effective_chat.id,
+                chat_id=chat_id,
                 title='1 Flask',
                 description=f'Flask purchase for Player {player_id}',
-                payload=f'flask_one_{player_id}',
-                provider_token="",
+                payload=payload,
+                provider_token=STARS_PROVIDER_TOKEN,  # Use the correct token
                 currency="XTR",
                 prices=[LabeledPrice('1 Flask', 1)],
                 start_parameter="start_parameter"
@@ -184,18 +186,17 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
 
         item_id = query.data
         item = ITEMS[item_id]
-
-        # Make sure message exists before trying to use it
-        if not isinstance(query.message, Message):
-            return
+        user_id = query.from_user.id if query.from_user else 'Unknown'
+        chat_id = query.message.chat_id
+        payload = f"{item_id}_{user_id}_{chat_id}"
 
         await context.bot.send_invoice(
             chat_id=query.message.chat_id,
             title=item['name'],
             description=item['description'],
-            payload=item_id,
-            provider_token="",  # Empty for digital goods
-            currency="XTR",  # Telegram Stars currency code
+            payload=payload,  # Use the new payload format
+            provider_token=STARS_PROVIDER_TOKEN,  # Use consistent token
+            currency="XTR",
             prices=[LabeledPrice(item['name'], int(item['price']))],
             start_parameter="start_parameter"
         )
@@ -259,26 +260,25 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
     """Handle successful payments with player-specific logic."""
     payment = update.message.successful_payment
 
-    # Parse payload to get item and player ID
+    # Parse payload to get item and user ID
     payload_parts = payment.invoice_payload.split('_')
     item_id = payload_parts[0]
-    player_id = int(payload_parts[1])
+    user_id = payload_parts[1] if len(payload_parts) > 1 else "Unknown"
 
     item = ITEMS[item_id]
-    user_id = update.effective_user.id
 
     # Update statistics
     STATS['purchases'][str(user_id)] += 1
 
     logger.info(
         f"Successful payment from user {user_id} "
-        f"for item {item_id} for Player {player_id} "
+        f"for item {item_id} "
         f"(charge_id: {payment.telegram_payment_charge_id})"
     )
 
     await update.message.reply_text(
         f"Thank you for your purchase! 🎉\n"
-        f"Player {player_id} has received: {item['name']}\n\n"
+        f"You have received: {item['name']}\n\n"
         f"To get a refund, use this command:\n"
         f"`/refund {payment.telegram_payment_charge_id}`",
         parse_mode='Markdown'
