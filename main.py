@@ -66,15 +66,27 @@ async def oneflask_purchase(update: Update, context: CallbackContext) -> None:
 
 
 async def start(update: Update, context: CallbackContext) -> None:
-     await update.message.reply_text(
-        "Click the button below to play The Last Strip!",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(
-                "🎮 Launch The Last Strip",
-                web_app=WebAppInfo(url="https://vkss.itch.io/tls")
-            )]
-        ])
-    )
+    """Handle deep links for purchases."""
+    # Check if there's a deep link parameter
+    if context.args and context.args[0].startswith('purchase_flask_'):
+        try:
+            # Extract player ID from the deep link
+            player_id = int(context.args[0].split('_')[-1])
+
+            # Directly send invoice with player ID in payload
+            await context.bot.send_invoice(
+                chat_id=update.effective_chat.id,
+                title='1 Flask',
+                description=f'Flask purchase for Player {player_id}',
+                payload=f'flask_one_{player_id}',
+                provider_token="",
+                currency="XTR",
+                prices=[LabeledPrice('1 Flask', 1)],
+                start_parameter="start_parameter"
+            )
+        except Exception as e:
+            logger.error(f"Error processing deep link purchase: {str(e)}")
+            await update.message.reply_text("Sorry, there was an error processing your purchase.")
 
 
 async def shop(update: Update, context: CallbackContext) -> None:
@@ -195,9 +207,14 @@ async def precheckout_callback(update: Update, context: CallbackContext) -> None
 
 
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
-    """Handle successful payments."""
+    """Handle successful payments with player-specific logic."""
     payment = update.message.successful_payment
-    item_id = payment.invoice_payload
+
+    # Parse payload to get item and player ID
+    payload_parts = payment.invoice_payload.split('_')
+    item_id = payload_parts[0]
+    player_id = int(payload_parts[1])
+
     item = ITEMS[item_id]
     user_id = update.effective_user.id
 
@@ -206,16 +223,15 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
 
     logger.info(
         f"Successful payment from user {user_id} "
-        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id})"
+        f"for item {item_id} for Player {player_id} "
+        f"(charge_id: {payment.telegram_payment_charge_id})"
     )
 
     await update.message.reply_text(
-        f"Thank you for your purchase! 🎉\n\n"
-        f"Here's your secret code for {item['name']}:\n"
-        f"`{item['secret']}`\n\n"
+        f"Thank you for your purchase! 🎉\n"
+        f"Player {player_id} has received: {item['name']}\n\n"
         f"To get a refund, use this command:\n"
-        f"`/refund {payment.telegram_payment_charge_id}`\n\n"
-        "Save this message to request a refund later if needed.",
+        f"`/refund {payment.telegram_payment_charge_id}`",
         parse_mode='Markdown'
     )
 
