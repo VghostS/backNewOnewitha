@@ -21,7 +21,6 @@ from config import ITEMS, MESSAGES
 # Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-STARS_PROVIDER_TOKEN = "645982161:TEST:2477"  # Telegram Stars test provider token
 
 # Setup logging
 logging.basicConfig(
@@ -36,70 +35,46 @@ STATS: Dict[str, DefaultDict[str, int]] = {
     'refunds': defaultdict(int)
 }
 
-
 async def oneflask_purchase(update: Update, context: CallbackContext) -> None:
-    """Direct purchase handler for OneFlask - goes directly to confirmation."""
-    item_id = 'flask_one'
+    """Direct purchase handler for OneFlask."""
+    item_id = 'flask_one'  # Assuming 'oneflask' is a key in your ITEMS dictionary
+    await update.message.reply_text(
+        "You are buying one flask for one star!")
+
+    if item_id not in ITEMS:
+        await update.message.reply_text("Sorry, this item is currently unavailable.")
+        return
+
     item = ITEMS[item_id]
 
-    # Use the chat ID directly from the update
-    chat_id = update.effective_chat.id
+    # Create a single confirmation button for purchase
+    keyboard = [
+        [InlineKeyboardButton(
+            f"Confirm Purchase: {item['name']} - {item['price']} ⭐",
+            callback_data=item_id
+        )]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Get the user ID for logging
-    user_id = update.effective_user.id if update.effective_user else 'Unknown'
-
-    try:
-        # Create a simpler payload
-        payload = f"{item_id}"  # Simplified payload
-        logger.info(f"Creating invoice with payload: {payload}")
-
-        # Send invoice with detailed logging
-        invoice = await context.bot.send_invoice(
-            chat_id=chat_id,
-            title=item['name'],
-            description=item['description'],
-            payload=payload,
-            provider_token=STARS_PROVIDER_TOKEN,
-            currency="XTR",
-            prices=[LabeledPrice(item['name'], item['price'])],
-            start_parameter="oneflask_purchase"
-        )
-
-        logger.info(f"Invoice sent to user {user_id} in chat {chat_id}")
-
-    except Exception as e:
-        logger.error(f"Error in oneflask_purchase: {str(e)}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-
-        await update.message.reply_text(
-            f"Sorry, there was an error processing your purchase:\n{str(e)}"
-        )
+    await update.message.reply_text(
+        f"Item: {item['name']}\n"
+        f"Description: {item['description']}\n"
+        f"Price: {item['price']} ⭐\n\n"
+        "Click the button below to purchase:",
+        reply_markup=reply_markup
+    )
 
 
 async def start(update: Update, context: CallbackContext) -> None:
-    """Handle deep links for purchases."""
-    if context.args and context.args[0].startswith('purchase_flask_'):
-        try:
-            player_id = int(context.args[0].split('_')[-1])
-            user_id = update.effective_user.id
-            chat_id = update.effective_chat.id
-
-            # Create a payload that matches the expected format in precheckout_callback
-            payload = f"flask_one_{user_id}_{chat_id}"
-
-            await context.bot.send_invoice(
-                chat_id=chat_id,
-                title='1 Flask',
-                description=f'Flask purchase for Player {player_id}',
-                payload=payload,
-                provider_token=STARS_PROVIDER_TOKEN,  # Use the correct token
-                currency="XTR",
-                prices=[LabeledPrice('1 Flask', 1)],
-                start_parameter="start_parameter"
-            )
-        except Exception as e:
-            logger.error(f"Error processing deep link purchase: {str(e)}")
-            await update.message.reply_text("Sorry, there was an error processing your purchase.")
+     await update.message.reply_text(
+        "Click the button below to play The Last Strip!",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "🎮 Launch The Last Strip",
+                web_app=WebAppInfo(url="https://vkss.itch.io/tls")
+            )]
+        ])
+    )
 
 
 async def shop(update: Update, context: CallbackContext) -> None:
@@ -186,17 +161,18 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
 
         item_id = query.data
         item = ITEMS[item_id]
-        user_id = query.from_user.id if query.from_user else 'Unknown'
-        chat_id = query.message.chat_id
-        payload = f"{item_id}_{user_id}_{chat_id}"
+
+        # Make sure message exists before trying to use it
+        if not isinstance(query.message, Message):
+            return
 
         await context.bot.send_invoice(
             chat_id=query.message.chat_id,
             title=item['name'],
             description=item['description'],
-            payload=payload,  # Use the new payload format
-            provider_token=STARS_PROVIDER_TOKEN,  # Use consistent token
-            currency="XTR",
+            payload=item_id,
+            provider_token="",  # Empty for digital goods
+            currency="XTR",  # Telegram Stars currency code
             prices=[LabeledPrice(item['name'], int(item['price']))],
             start_parameter="start_parameter"
         )
@@ -210,60 +186,18 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
 
 
 async def precheckout_callback(update: Update, context: CallbackContext) -> None:
-    """Comprehensive pre-checkout query handling with detailed logging."""
+    """Handle pre-checkout queries."""
     query = update.pre_checkout_query
-
-    try:
-        # Log all available information for debugging
-        logger.info("Pre-Checkout Query Details:")
-        logger.info(f"Payload: {query.invoice_payload}")
-        logger.info(f"Total Amount: {query.total_amount}")
-        logger.info(f"Currency: {query.currency}")
-
-        # Parse payload
-        payload_parts = query.invoice_payload.split('_')
-        logger.info(f"Payload Parts: {payload_parts}")
-
-        # Check each validation condition separately for better debugging
-        has_enough_parts = len(payload_parts) >= 3
-        is_valid_item = payload_parts[0] in ITEMS if payload_parts else False
-        is_flask_one = payload_parts[0] == 'flask_one' if payload_parts else False
-
-        logger.info(
-            f"Validation results: parts_check={has_enough_parts}, item_check={is_valid_item}, flask_check={is_flask_one}")
-
-        # Let's make the validation less strict for troubleshooting
-        if payload_parts and payload_parts[0] in ITEMS:
-            logger.info("Pre-checkout validation successful")
-            await query.answer(ok=True)
-            return
-
-        # If validation fails
-        logger.warning(f"Pre-checkout validation failed. Payload: {query.invoice_payload}")
-        await query.answer(
-            ok=False,
-            error_message="Invalid purchase details. Please try again."
-        )
-
-    except Exception as e:
-        logger.error(f"Pre-checkout error: {str(e)}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-
-        await query.answer(
-            ok=False,
-            error_message=f"System error: {str(e)}"
-        )
+    if query.invoice_payload in ITEMS:
+        await query.answer(ok=True)
+    else:
+        await query.answer(ok=False, error_message="Something went wrong...")
 
 
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
-    """Handle successful payments with player-specific logic."""
+    """Handle successful payments."""
     payment = update.message.successful_payment
-
-    # Parse payload to get item and player ID
-    payload_parts = payment.invoice_payload.split('_')
-    item_id = payload_parts[0]
-    player_id = int(payload_parts[1])
-
+    item_id = payment.invoice_payload
     item = ITEMS[item_id]
     user_id = update.effective_user.id
 
@@ -272,15 +206,16 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
 
     logger.info(
         f"Successful payment from user {user_id} "
-        f"for item {item_id} for Player {player_id} "
-        f"(charge_id: {payment.telegram_payment_charge_id})"
+        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id})"
     )
 
     await update.message.reply_text(
-        f"Thank you for your purchase! 🎉\n"
-        f"Player {player_id} has received: {item['name']}\n\n"
+        f"Thank you for your purchase! 🎉\n\n"
+        f"Here's your secret code for {item['name']}:\n"
+        f"`{item['secret']}`\n\n"
         f"To get a refund, use this command:\n"
-        f"`/refund {payment.telegram_payment_charge_id}`",
+        f"`/refund {payment.telegram_payment_charge_id}`\n\n"
+        "Save this message to request a refund later if needed.",
         parse_mode='Markdown'
     )
 
