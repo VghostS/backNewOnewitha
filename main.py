@@ -21,6 +21,7 @@ from config import ITEMS, MESSAGES
 # Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+STARS_PROVIDER_TOKEN = "645982161:TEST:2477"  # Telegram Stars test provider token
 
 # Setup logging
 logging.basicConfig(
@@ -35,34 +36,44 @@ STATS: Dict[str, DefaultDict[str, int]] = {
     'refunds': defaultdict(int)
 }
 
+
 async def oneflask_purchase(update: Update, context: CallbackContext) -> None:
-    """Direct purchase handler for OneFlask."""
-    item_id = 'flask_one'  # Assuming 'oneflask' is a key in your ITEMS dictionary
-    await update.message.reply_text(
-        "You are buying one flask for one star!")
-
-    if item_id not in ITEMS:
-        await update.message.reply_text("Sorry, this item is currently unavailable.")
-        return
-
+    """Direct purchase handler for OneFlask - goes directly to confirmation."""
+    item_id = 'flask_one'
     item = ITEMS[item_id]
 
-    # Create a single confirmation button for purchase
-    keyboard = [
-        [InlineKeyboardButton(
-            f"Confirm Purchase: {item['name']} - {item['price']} ⭐",
-            callback_data=item_id
-        )]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Use the chat ID directly from the update
+    chat_id = update.effective_chat.id
 
-    await update.message.reply_text(
-        f"Item: {item['name']}\n"
-        f"Description: {item['description']}\n"
-        f"Price: {item['price']} ⭐\n\n"
-        "Click the button below to purchase:",
-        reply_markup=reply_markup
-    )
+    # Get the user ID for logging
+    user_id = update.effective_user.id if update.effective_user else 'Unknown'
+
+    try:
+        # Create a unique payload with more robust identification
+        payload = f"{item_id}_{user_id}_{chat_id}"
+        logger.info(f"Creating invoice with payload: {payload}")
+
+        # Send invoice with detailed logging
+        invoice = await context.bot.send_invoice(
+            chat_id=chat_id,
+            title=item['name'],
+            description=item['description'],
+            payload=payload,
+            provider_token=STARS_PROVIDER_TOKEN,
+            currency="XTR",
+            prices=[LabeledPrice(item['name'], item['price'])],
+            start_parameter="oneflask_purchase"
+        )
+
+        logger.info(f"Invoice sent to user {user_id} in chat {chat_id}")
+
+    except Exception as e:
+        logger.error(f"Error in oneflask_purchase: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+
+        await update.message.reply_text(
+            f"Sorry, there was an error processing your purchase:\n{str(e)}"
+        )
 
 
 async def start(update: Update, context: CallbackContext) -> None:
@@ -198,12 +209,50 @@ async def button_handler(update: Update, context: CallbackContext) -> None:
 
 
 async def precheckout_callback(update: Update, context: CallbackContext) -> None:
-    """Handle pre-checkout queries."""
+    """Comprehensive pre-checkout query handling with detailed logging."""
     query = update.pre_checkout_query
-    if query.invoice_payload in ITEMS:
-        await query.answer(ok=True)
-    else:
-        await query.answer(ok=False, error_message="Something went wrong...")
+
+    try:
+        # Log all available information
+        logger.debug("Pre-Checkout Query Details:")
+        logger.debug(f"Payload: {query.invoice_payload}")
+        logger.debug(f"Total Amount: {query.total_amount}")
+        logger.debug(f"Currency: {query.currency}")
+
+        # Payload validation with more robust checks
+        payload_parts = query.invoice_payload.split('_')
+
+        # Detailed logging of payload parts
+        logger.debug(f"Payload Parts: {payload_parts}")
+        logger.debug(f"Number of Payload Parts: {len(payload_parts)}")
+
+        # Check if payload has at least 3 parts and first part is a valid item
+        if (len(payload_parts) >= 3 and
+                payload_parts[0] in ITEMS and
+                payload_parts[0] == 'flask_one'):  # Ensure it's specifically the flask item
+
+            # Additional validation for price
+            item = ITEMS[payload_parts[0]]
+            if query.total_amount == item['price']:
+                logger.info("Pre-checkout validation successful")
+                await query.answer(ok=True)
+                return
+
+        # If validation fails
+        logger.warning("Pre-checkout validation failed")
+        await query.answer(
+            ok=False,
+            error_message="Invalid purchase details. Please try again."
+        )
+
+    except Exception as e:
+        logger.error(f"Pre-checkout error: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+
+        await query.answer(
+            ok=False,
+            error_message=f"System error: {str(e)}"
+        )
 
 
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
