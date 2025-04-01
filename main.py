@@ -16,13 +16,6 @@ from telegram.ext import (
 )
 
 from config import ITEMS, MESSAGES
-# Add these imports at the top
-from urllib.parse import urlencode
-from telegram import WebAppInfo
-import json
-
-GAME_URL = "https://vkss.itch.io/tls"
-BOT_USERNAME = os.getenv('theLastStrip_bot')
 
 
 # Load environment variables
@@ -70,43 +63,6 @@ async def oneflask_purchase(update: Update, context: CallbackContext) -> None:
         "Click the button below to purchase:",
         reply_markup=reply_markup
     )
-
-
-# Add this new function to handle deep links
-async def handle_deep_link(update: Update, context: CallbackContext) -> None:
-    """Handle deep linking for game purchases."""
-    if not update.message or not update.message.text:
-        return
-
-    args = context.args
-    if not args:
-        # No deep link parameter, just start the game
-        await start(update, context)
-        return
-
-    # Handle deep link parameters
-    command = args[0]
-
-    if command.startswith('buy_'):
-        # Extract item_id from deep link
-        item_id = command.replace('buy_', '')
-        if item_id in ITEMS:
-            # Process the purchase directly
-            item = ITEMS[item_id]
-            await context.bot.send_invoice(
-                chat_id=update.message.chat_id,
-                title=item['name'],
-                description=item['description'],
-                payload=item_id,
-                provider_token="",  # Empty for digital goods
-                currency="XTR",  # Telegram Stars currency code
-                prices=[LabeledPrice(item['name'], int(item['price']))],
-                start_parameter=f"buy_{item_id}"
-            )
-        else:
-            await update.message.reply_text("Invalid item requested.")
-    else:
-        await start(update, context)
 
 
 async def start(update: Update, context: CallbackContext) -> None:
@@ -238,9 +194,8 @@ async def precheckout_callback(update: Update, context: CallbackContext) -> None
         await query.answer(ok=False, error_message="Something went wrong...")
 
 
-# Modify your successful_payment_callback function
 async def successful_payment_callback(update: Update, context: CallbackContext) -> None:
-    """Handle successful payments with game return URL."""
+    """Handle successful payments."""
     payment = update.message.successful_payment
     item_id = payment.invoice_payload
     item = ITEMS[item_id]
@@ -249,27 +204,18 @@ async def successful_payment_callback(update: Update, context: CallbackContext) 
     # Update statistics
     STATS['purchases'][str(user_id)] += 1
 
-    # Create purchase data
-    purchase_data = {
-        'item_id': item_id,
-        'secret': item['secret'],
-        'user_id': str(user_id),
-        'transaction_id': payment.telegram_payment_charge_id
-    }
-
-    # Create the return URL with a special protocol
-    return_url = f"{GAME_URL}?purchaseData={json.dumps(purchase_data)}"
+    logger.info(
+        f"Successful payment from user {user_id} "
+        f"for item {item_id} (charge_id: {payment.telegram_payment_charge_id})"
+    )
 
     await update.message.reply_text(
         f"Thank you for your purchase! 🎉\n\n"
-        f"Your {item['name']} has been activated.\n\n"
-        f"Click below to return to the game and claim your item:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(
-                "🎮 Return to Game",
-                web_app=WebAppInfo(url=return_url)
-            )]
-        ]),
+        f"Here's your secret code for {item['name']}:\n"
+        f"`{item['secret']}`\n\n"
+        f"To get a refund, use this command:\n"
+        f"`/refund {payment.telegram_payment_charge_id}`\n\n"
+        "Save this message to request a refund later if needed.",
         parse_mode='Markdown'
     )
 
@@ -279,24 +225,20 @@ async def error_handler(update: Update, context: CallbackContext) -> None:
     logger.error(f"Update {update} caused error {context.error}")
 
 
-# Modify your main() function to update the handlers
 def main() -> None:
     """Start the bot."""
     try:
         application = Application.builder().token(BOT_TOKEN).build()
 
-        # Update the start command to use the deep link handler
-        application.add_handler(CommandHandler("start", handle_deep_link))
-
-        # Add your other existing handlers
+        # Add handlers
+        application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("refund", refund_command))
-        application.add_handler(CommandHandler("playgame", play_game))
+        application.add_handler(CommandHandler("playgame", play_game))  # New handler for /playgame
         application.add_handler(CommandHandler("shop", shop))
         application.add_handler(CommandHandler("oneflask", oneflask_purchase))
         application.add_handler(CallbackQueryHandler(button_handler))
         application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-        application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
         application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
         # Add error handler
