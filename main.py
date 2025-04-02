@@ -71,7 +71,7 @@ async def start(update: Update, context: CallbackContext) -> None:
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "🎮 Launch The Last Strip",
-                web_app=WebAppInfo(url="https://vkss.itch.io/tls")
+                web_app=WebAppInfo(url="https://vghosts.github.io/Gmae/")
             )]
         ])
     )
