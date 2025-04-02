@@ -17,7 +17,6 @@ from telegram.ext import (
 
 from config import ITEMS, MESSAGES
 
-
 # Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
